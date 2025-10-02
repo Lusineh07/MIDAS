@@ -8,3 +8,5 @@ api-context:
 smoke:
 	./scripts/smoke_local.sh
 
+install:
+\tpip install -U pip && pip install -r requirements.txt
