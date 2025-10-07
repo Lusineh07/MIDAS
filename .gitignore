@@ -15,3 +15,6 @@ dist/
 *.swp
 *.swo
 *~
+training/data/
+__pycache__/
+*.pyc
