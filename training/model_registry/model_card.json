@@ -1,0 +1,17 @@
+{
+  "version": "v0001",
+  "max_depth": 7,
+  "calib_cv": 3,
+  "accuracy_vs_teacher_test": 0.971,
+  "brier_mean_ovr": 0.009691706492086416,
+  "classes": [
+    "NO_ACTION",
+    "IRON_CONDOR",
+    "DEBIT_CALL",
+    "DEBIT_PUT",
+    "COVERED_CALL"
+  ],
+  "n_train": 32000,
+  "n_val": 4000,
+  "n_test": 4000
+}
