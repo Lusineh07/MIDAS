@@ -38,4 +38,6 @@ def test_latency_p95_reasonable():
 
     adaptive_limit = max(6.0, p50 * 3.0)  # portable stability guard
     hard_ceiling   = float(os.environ.get("RECOMMENDER_P95_MS", "40"))
-    assert p95 < adaptive_limit and p95 < hard_ceiling, f"p50={p50:.2f}ms p95={p95:.2f}ms (limit {adaptive_limit:.2f}ms, ceiling {hard_ceiling:.1f}ms)"
+    assert p95 < adaptive_limit and p95 < hard_ceiling, (
+        f"p50={p50:.2f}ms p95={p95:.2f}ms (limit {adaptive_limit:.2f}ms, ceiling {hard_ceiling:.1f}ms)"
+    )
