@@ -12,7 +12,6 @@ from services.recommender_api.app import app  # noqa: E402
 for k in ("OMP_NUM_THREADS","OPENBLAS_NUM_THREADS","MKL_NUM_THREADS","NUMEXPR_NUM_THREADS"):
     os.environ.setdefault(k, "1")
 
-client = TestClient(app)
 payload = {
     "sent_mean": 0.21, "sent_std": 0.08,
     "r_1m": 0.003, "r_5m": 0.001,
@@ -21,18 +20,27 @@ payload = {
     "liquidity_flag": True
 }
 
-# warmup
-for _ in range(50):
-    assert client.post("/api/recommend", json=payload).status_code == 200
+with TestClient(app) as client:
+    # sanity: healthz
+    hz = client.get("/healthz")
+    if hz.status_code != 200:
+        raise SystemExit(f"/healthz failed: {hz.status_code} {hz.text}")
 
-# sample
-n = 300
-xs = []
-for _ in range(n):
-    t0 = time.perf_counter_ns()
-    r = client.post("/api/recommend", json=payload)
-    assert r.status_code == 200, r.text
-    xs.append((time.perf_counter_ns() - t0) / 1e6)
+    # warmup
+    for _ in range(50):
+        r = client.post("/api/recommend", json=payload)
+        if r.status_code != 200:
+            raise SystemExit(f"warmup failed: {r.status_code} {r.text}")
+
+    # sample
+    n = 300
+    xs = []
+    for _ in range(n):
+        t0 = time.perf_counter_ns()
+        r = client.post("/api/recommend", json=payload)
+        if r.status_code != 200:
+            raise SystemExit(f"sample failed: {r.status_code} {r.text}")
+        xs.append((time.perf_counter_ns() - t0) / 1e6)
 
 xs.sort()
 p50 = stats.median(xs)
