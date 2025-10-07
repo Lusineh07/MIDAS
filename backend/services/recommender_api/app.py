@@ -1,11 +1,10 @@
-# services/recommender_api/app.py
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from .inference import Recommender, FeatureIn
 
 app = FastAPI(title="MIDAS Recommender API", version="v1")
 
-# Resolve .../MIDAS(-recommender)/training/model_registry/recommender_v0001.joblib
+# Resolve .../training/model_registry/recommender_v0001.joblib
 MODEL_PATH = (
     Path(__file__).resolve().parents[2]
     / "training" / "model_registry" / "recommender_v0001.joblib"
