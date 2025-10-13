@@ -1,0 +1,99 @@
+/* ========================================
+   GLOBAL STYLES
+   ======================================== */
+
+:root {
+  --bg: rgba(12,14,22,.72); --fg:#EDEFF3; --muted:#a19ab2;
+  --pos:#3FDB8D; --neg:#FF6B6B; --neu:#C2C8D0; --accent:#976efe;
+  --h: 34px;
+}
+
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: transparent; }
+body { -webkit-app-region: drag; } /* allow dragging anywhere except links/inputs */
+
+/* ========================================
+   HUD
+   ======================================== */
+
+.hud {
+  -webkit-app-region: drag;   /* Makes it draggable */
+  user-select: none;          /* Prevents text selection while dragging */ 
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 20px; height: var(--h);
+  background: var(--bg); color: var(--fg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  font: 14px/1 Segoe UI, system-ui, -apple-system, Arial, sans-serif;
+  border-radius: 24px; backdrop-filter: blur(6px);
+  user-select: none;
+}
+
+.hud-logo {
+  height: 18px;
+  margin-right: 10px;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 1px rgba(0,0,0,0.5));
+}
+
+/* ========================================
+   HUD COMPONENETS
+   ======================================== */
+
+#tickerInput {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  color: #f1f1f1;
+  font-size: 13px;
+  text-transform: uppercase; /* auto-uppercase */
+  outline: none;
+  width: 70px; 
+  margin-right: 12px;
+}
+
+#price {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+/* Displayed Data/Dividers */
+.sec { white-space: nowrap; -webkit-app-region: no-drag; } /* Section Title */
+.ticker { font-weight: 700; letter-spacing: .3px; padding: 0 0px; border-radius: 4px; cursor: text; }
+.num { font-weight: 600; }
+.muted { color: var(--muted); font-weight: 500; }
+.sep { color: #867e98; opacity: .9; } /* Dividers */
+.sentiment .label { color: var(--muted); margin-right: 2px; }
+.sentiment .sigma { color: var(--muted); margin-left: 4px; }
+.strat { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.badge { font-weight: 700; padding: 1px 4px; border-radius: 4px; background: rgba(110,168,254,.15); }
+.conf { position: relative; display: inline-flex; align-items: center; }
+.conf .bar {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  height: 10px; max-width: 32px; width: 0; background: rgba(151,110,254,.35);
+  border-radius: 3px; z-index: 0;
+}
+
+.conf span:last-child { position: relative; padding-left: 4px; z-index: 1; }
+.oneliner { overflow: hidden; text-overflow: ellipsis; max-width: 44vw; }
+.pos { color: var(--pos); } .neg { color: var(--neg); } .neu { color: var(--neu); }
+.hide-narrow { display: none; } /* add breakpoints later if you want */
+
+
+/* 
+  Ticker Validation
+  TO DO: Planning to add shake animation for invalid ticker inputs/clean
+*/
+@keyframes shake {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+
+.shake {
+  animation: shake 0.3s;
+}
