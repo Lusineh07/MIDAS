@@ -1,33 +1,38 @@
 import http.client
 import json
+import os
+from dotenv import load_dotenv
 
-conn = http.client.HTTPSConnection("api.apyhub.com")
+def summarize_articles(formatted_string):
 
-text = (
-    "How Will Dow Futures Open As Trump Adds 100% China Tariff? Oracle, Tesla, Taiwan Semi In Focus: "
-    "The stock market tumbled with President Trump imposing huge China tariffs after the close. "
-    "Oracle, JPMorgan, Taiwan Semi are on tap. Is Tesla's chart healthy?\n"
-    "What's the End of the EV Tax Credit Mean for Tesla? Listen to Elon Musk: "
-    "A key advantage for EVs is going away.\n"
-    "Tesla’s top-compensated executives & directors besides Elon Musk: "
-    "Quick facts …"
-    # add the rest of your text here…
-)
+    # Loads APY token from .env file
+    load_dotenv()
+    APY_TOKEN = os.getenv("APY_TOKEN")
 
-payload_obj = {
-    "text": text,
-    "summary_length": "short",
-    "output_language": "en"
-}
+    # Establishes connection with apyhub
+    conn = http.client.HTTPSConnection("api.apyhub.com")
 
-payload = json.dumps(payload_obj, ensure_ascii=False).encode("utf-8")
+    # Payload obj for API call body
+    payload_obj = {
+        "text": formatted_string,
+        "summary_length": "short",
+        "output_language": "en"
+    }
 
-headers = {
-    "Content-Type": "application/json; charset=utf-8",
-    "apy-token": "token"
-}
+    # API body
+    payload = json.dumps(payload_obj, ensure_ascii=False).encode("utf-8")
 
-conn.request("POST", "/ai/summarize-text", body=payload, headers=headers)
-res = conn.getresponse()
-data = res.read()
-print(data.decode("utf-8", errors="replace"))
+    # API call headers
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "apy-token": APY_TOKEN
+    }
+
+    # Makes HTTP request to API through established connection
+    conn.request("POST", "/ai/summarize-text", body=payload, headers=headers)
+    # Gets response
+    res = conn.getresponse()
+    # Parses response
+    data = res.read()
+
+    return data.decode("utf-8", errors="replace")
