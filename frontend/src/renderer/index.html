@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+    <!-- TO DO: 
+     -- tooltips, improve comments -->
+
+    <!-- HEADER -->
+    <head>
+        <meta charset="utf-8" />
+        <title>Trade HUD</title>
+        <meta http-equiv="Content-Security-Policy"
+            content="default-src 'self';
+            style-src 'self' 'unsafe-inline';
+            img-src 'self';
+            script-src 'self';
+            connect-src 'self';" >
+        <link rel="stylesheet" href="./style.css" />
+    </head>
+    <body>
+        <!-- Working to add on-hover tooltips, planning on using Google Chrome tab tooltips for reference -->
+        <div id="hud" class="hud" title="Drag to move. Resize edges.">
+            
+             <!-- Logo, may change to menu icon, collapsable menu for viewing features/preferences -->
+            <image src="../assets/white-logo.svg" alt="White Logo" class="hud-logo" />
+            
+        <!-- Stock Ticker -->
+            <div class="sec ticker" id="sym" contenteditable="true" spellcheck="false">NVDA</div>
+            <div class="sep">·</div>
+
+        <!-- Last Quote -->
+            <div class="sec num" id="last">—</div>
+            <div class="sep">·</div>
+            <div class="sec muted">B/A</div>
+            
+        <!-- Bid/Ask -->
+            <div class="sec num" id="ba">—</div>
+            <div class="sep">·</div>
+
+        <!-- Short-Term Returns -->
+            <div class="sec num" id="m1">—</div>
+            <div class="sep hide-narrow">·</div>
+            <div class="sec num hide-narrow" id="m5">—</div>
+            <div class="sep">·</div>
+
+        <!-- Simple Moving Average-->
+            <div class="sec muted">SMA20</div>
+            <div class="sec num" id="sma">—</div>
+            <div class="sep">·</div>
+
+        <!-- Sentiment -->
+            <div class="sec sentiment">
+                <span class="label">Sent</span>
+                <span class="val" id="sent">—</span>
+                <span class="sigma" id="sigma">σ—</span>
+            </div>
+            <div class="sep">·</div>
+
+        <!-- Trading Strategy -->
+            <div class="sec strat">
+                <span class="badge" id="strat">NA</span>
+                <span class="conf"><span class="bar" id="bar"></span><span id="conf">—</span></span>
+            </div>
+            <div class="sep">—</div>
+
+        <!-- One-liner Recommendation -->
+            <div class="sec oneliner" id="one">Loading…</div>
+            <div class="sep">·</div>
+
+        <!-- Time Since -->
+            <div class="sec muted" id="cache">⟳—s</div>
+        </div>
+
+        <script src="./renderer.js"></script>
+    </body>
+</html>
