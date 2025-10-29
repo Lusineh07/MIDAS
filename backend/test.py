@@ -1,6 +1,6 @@
 from fetch_articles import fetch_articles
 from sentiment_analysis import analyze_sentiment
-from summarize_articles import summarize_articles
+from summarize_text import summarize_text
 
 # Test ticker and keyword for fetching articles
 ticker = "TSLA"
@@ -17,14 +17,12 @@ print('--- SENTIMENTS ---')
 for article in article_data['articles']:
   print(article['title'] + ' : ' + str(article['signed']))
 
-# Prints formatted string input for summary
-print('\n--- FORMATTED ARTICLE STRING ---')
-formatted_article_string = ''
-for article in articles:
-  formatted_article_string += (article['title'] + ' : ' + article['summary'])
-print(formatted_article_string)
+# Prints formatted string input for AI model summary
+print('\n--- FORMATTED STRING ---')
+formatted_string = articles[0]['title'] + " : " + articles[0]['summary']
+print(formatted_string)
 
 # Prints summary of formatted article string
 print('\n--- SUMMARY ---')
-summary = summarize_articles(formatted_article_string)
+summary = summarize_text(formatted_string, keyword)
 print(summary)
