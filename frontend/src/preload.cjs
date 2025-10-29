@@ -12,27 +12,29 @@
  * -- link each API
  *  ====================================================== */
 
-
+const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose API methods to renderer
 contextBridge.exposeInMainWorld('electronAPI', {
 
-    // TICKER DATA - Fetch quote snapshot (price, bid/ask, SMA comparison)
-    getQuote: (ticker) => ipcRenderer.invoke('getQquote', ticker),
+    // TICKER VALIDATION
+    validateTicker: (ticker) => ipcRenderer.invoke('validate-ticker', ticker),
 
-    // (TO DO) TO LINK IN MAIN
+    // TICKER DATA - Fetch quote snapshot (price, bid/ask, SMA comparison)
+    getQuote: (ticker) => ipcRenderer.invoke('getQuote', ticker),
+
     // NEWS/HEADLINES DATA - Retrieve top recent news headlines for ticker
     getNews: (ticker) => ipcRenderer.invoke('getNews', ticker),
 
     // SENTIMENT ANALYSIS - send fetched headlines to (FinBERT) backend for sent. scoring
     analyzeSentiment: (ticker) => ipcRenderer.invoke('analyzeSentiment', ticker),
 
-    // (TO DO)
     // STRATEGY RECOMMENDER
-
-    // (TO DO)
+    getRecommendation: (features) => ipcRenderer.invoke('getRecommendation', features),
+    
     // ONE-LINER SUGGESTION
-})
+    generateOneLiner: (prompt) => ipcRenderer.invoke('generateOneLiner', prompt),
+});
 
 
 /** Mock Payload Code
