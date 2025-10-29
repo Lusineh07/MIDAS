@@ -1,45 +1,70 @@
 {
   "name": "hud-ui-test",
   "version": "1.0.0",
-  "description": "",
+  "description": "MIDAS Windows HUD for ticker insights",
   "main": "src/main.cjs",
   "build": {
-    "appId": "com.example.hud",
-    "productName": "Trade HUD",
+    "appId": "com.midas.hud",
+    "productName": "MIDAS HUD",
     "files": [
       "src/**/*",
       "package.json"
     ],
+    "asar": true,
     "directories": {
-      "buildResources": "build"
+      "buildResources": "build",
+      "output": "dist"
     },
     "extraMetadata": {
       "main": "src/main.cjs"
     },
     "win": {
-      "target": "nsis",
-      "artifactName": "TradeHUD-Setup-${version}.exe"
-    }
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "MIDAS-HUD-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "icon": "build/icon.ico"
   },
   "scripts": {
     "start": "cross-env NODE_ENV=development electronmon .",
     "dev": "npm run start",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder -w nsis",
     "build:win": "electron-builder --win nsis",
     "lint": "eslint . --ext .js,.cjs",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "gen:icon": "node scripts/gen-icon.cjs",
+    "predist": "npm run gen:icon"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "axios": "^1.12.2",
-    "dotenv": "^17.2.3",
-    "electron": "^32.2.0"
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
     "cross-env": "^10.0.0",
+    "electron": "^32.3.3",
     "electron-builder": "^26.0.12",
     "electronmon": "^2.0.4",
-    "eslint": "^9.36.0"
+    "eslint": "^9.36.0",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.4",
+    "to-ico": "^1.1.5"
   }
 }

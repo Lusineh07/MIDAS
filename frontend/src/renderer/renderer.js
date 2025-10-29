@@ -1,313 +1,260 @@
-/**
- * renderer.cjs
- * ==========================================================
- * -- Script runs before renderer process is loaded.
- * -- Securely exposes specific backend functions to frontend 
- *    through Electron's contextBridge
- * 
- * -- Prevents direct Node.js access in renderer for security 
- *    for safe communication via IPC (inter-process communication)
- * 
- * TO DO
- * -- link each API
- *  ====================================================== */
+// renderer.js — HUD (Windows copy) with HEADLINE-as-link + word-boundary clamp
 
+// ---------- helpers ----------
+function $(id) { return document.getElementById(id); }
+function signClass(n) { if (n > 0) return "pos"; if (n < 0) return "neg"; return "neu"; }
+function escapeHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function fmtPct(x, dp=2) { return `${(x*100).toFixed(dp)}%`; }
 
-// Performance Indicator with Color by sign (negative - red, positive - green)
-function signClass(n) {
-  if (n > 0) return 'pos';
-  if (n < 0) return 'neg';
-  return 'neu';
+// Remove "<CLASS>:" prefix & "Conf XX%" then tidy spacing
+function stripClassAndConf(text, klass){
+  if (!text) return "—";
+  let t = String(text);
+  if (klass) {
+    const rePrefix = new RegExp("^\\s*" + klass.replace(/[-/\\^$*+?.()|[\\]{}]/g,"\\$&") + "\\s*:\\s*", "i");
+    t = t.replace(rePrefix, "");
+  }
+  t = t.replace(/\bConf\s+\d{1,3}%\.?/i, "");
+  t = t.replace(/\s{2,}/g, " ").replace(/\s+([.,;:!?])/g, "$1").trim();
+  return t || "—";
+}
+function capitalizeFirstWord(s){
+  if (!s) return s;
+  const i = s.search(/[A-Za-z]/);
+  if (i < 0) return s;
+  return s.slice(0, i) + s.charAt(i).toUpperCase() + s.slice(i + 1);
 }
 
-// DOM refs for each item
-const $ = (id) => document.getElementById(id);
+// Clamp span/anchor text at a word boundary to fit `maxPx`
+function truncateAtWord(el, fullText, maxPx){
+  el.textContent = fullText;
+  if (el.scrollWidth <= maxPx) return;
+
+  let lo = 0, hi = fullText.length, best = "…";
+  while (lo < hi){
+    const mid = (lo + hi) >> 1;
+    const slice = fullText.slice(0, mid);
+    const cut   = slice.lastIndexOf(" ");
+    const cand  = (cut > 0 ? slice.slice(0, cut) : slice).trimEnd() + "…";
+    el.textContent = cand;
+    if (el.scrollWidth <= maxPx){ best = cand; lo = mid + 1; }
+    else { hi = mid; }
+  }
+  el.textContent = best;
+}
+
+// Re-clamp only the HEADLINE (now the link itself) based on available width
+function clampHeadline(){
+  const line = el.one;
+  if (!line) return;
+
+  const prefix   = line.querySelector(".one-prefix");
+  const headline = line.querySelector(".one-headline"); // <a> if link, <span> if no link
+  if (!headline) return;
+
+  const boxW  = line.clientWidth || 0;
+  const prefW = prefix ? prefix.getBoundingClientRect().width : 0;
+  const gap   = 0;  // no separate link anymore
+
+  const maxPx = Math.max(0, Math.floor(boxW - prefW - gap));
+  if (maxPx <= 0) return;
+
+  const full = headline.getAttribute("data-full") || headline.textContent || "";
+  truncateAtWord(headline, full, maxPx);
+}
+
+// ---------- DOM refs ----------
 const el = {
-  ticker: $('ticker'),
-  last: $('last'),
-  ba: $('ba'),
-  m1: $('m1'),
-  m5: $('m5'),
-  sma: $('sma'),
-  sent: $('sent'),
-  sigma: $('sigma'),
-  strat: $('strat'),
-  bar: $('bar'),
-  conf: $('conf'),
-  one: $('one'),
-  cache: $('cache')
+  ticker: $("ticker"),
+  last: $("last"),
+  ba: $("ba"),
+  m1: $("m1"),
+  m5: $("m5"),
+  sma: $("sma"),
+  sent: $("sent"),
+  sigma: $("sigma"),
+  strat: $("strat"),
+  bar: $("bar"),
+  conf: $("conf"),
+  one: $("one"),
+  cache: $("cache"),
+  hudInfo: $("hud-info"),
+  validationPrompt: $("validationPrompt"),
 };
 
+// ---------- config ----------
+const GATEWAY_URL = "http://127.0.0.1:8015";
+let currentTicker = null;
+let isFetching = false;
 
-/**
- * APIs/Ticker Info Fetch/Validation
- */
+// ---------- validation ----------
+function formatAndValidateTicker(raw){
+  const t = (raw || "").trim().toUpperCase();
+  if (!t) return { ok:false, msg:"Please enter a ticker" };
+  if (!/^[A-Z]{1,5}$/.test(t)) return { ok:false, msg:"*Invalid ticker format. Use letters only (1-5 characters, e.g., AAPL)." };
+  return { ok:true, ticker:t };
+}
+function showValidationMessage(message, isError = true){
+  el.validationPrompt.textContent = message;
+  el.validationPrompt.classList.remove("neutral");
+  el.validationPrompt.style.color = isError ? "#FF5F57" : "#AAA";
+  el.validationPrompt.classList.remove("hidden");
+}
+function clearValidationMessage(){
+  el.validationPrompt.textContent = "";
+  el.validationPrompt.classList.remove("neutral");
+  el.validationPrompt.classList.add("hidden");
+}
 
-document.addEventListener('DOMContentLoaded', () => {
-  const tickerInput = document.getElementById('ticker');
+// ---------- networking ----------
+async function fetchRun(ticker){
+  const res = await fetch(`${GATEWAY_URL}/api/run?ticker=${encodeURIComponent(ticker)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 
-  /*tickerInput.addEventListener('input', () => {
+// ---------- HUD helpers ----------
+function clearHud(){
+  [["last","—"],["ba","B/A"],["m1","—"],["m5","—"],["sma","SMA20"],
+   ["sent","—"],["sigma","σ—"],["strat","NA"],["conf","—"],["one","Loading…"],["cache","⟳—s"]]
+    .forEach(([k,v])=>{ if(el[k]) el[k].textContent=v; });
+  if(el.bar) el.bar.style.width="0px";
+  el.hudInfo.classList.remove("active");
+  el.hudInfo.classList.add("hidden");
+}
 
-    // Auto Resize Width based on text length
-    function adjustWidth() {
-      const textInput = ticker.textContent.trim() || ticker.dataset.placeholder;
-      measure.textContent = textInput;
+function render(payload){
+  const f    = payload?.features || {};
+  const rec  = payload?.recommendation || {};
+  const line = payload?.one_liner?.text || "—";
+  const head = payload?.top_headline;
+  const q    = payload?.quote || null;
+  const age  = payload?.cache_age_seconds;
 
-      tickerInput.style.width = `${measure.offsetWidth}px`;
-    }
+  // Last / B&A
+  if (q && typeof q.last === "number" && isFinite(q.last) && q.last > 0) el.last.textContent = q.last.toFixed(2);
+  else el.last.textContent = "—";
+  if (q && q.bid!=null && q.ask!=null && isFinite(q.bid) && isFinite(q.ask) && q.ask>q.bid)
+    el.ba.textContent = `${Number(q.bid).toFixed(2)}/${Number(q.ask).toFixed(2)}`;
+  else el.ba.textContent = "B/A";
 
-    tickerInput.addEventListener('input', adjustWidth);
-    tickerInput.addEventListener('focus', adjustWidth);
-    tickerInput.addEventListener('blur', adjustWidth);
+  // Returns
+  const r1 = (typeof f.r_1m === "number") ? f.r_1m : null;
+  const r5 = (typeof f.r_5m === "number") ? f.r_5m : null;
+  el.m1.textContent = r1 == null ? "—" : `1m ${(r1 >= 0 ? "+" : "")}${fmtPct(r1)}`;
+  el.m1.className   = `sec num ${signClass(r1 ?? 0)}`;
+  el.m5.textContent = r5 == null ? "—" : `5m ${(r5 >= 0 ? "+" : "")}${fmtPct(r5)}`;
+  el.m5.className   = `sec num ${signClass(r5 ?? 0)}`;
 
-    adjustWidth();
+  // SMA20
+  const above = !!f.above_sma20;
+  el.sma.textContent = above ? "↑" : "↓";
+  el.sma.className   = `sec muted ${above ? "pos" : "neg"}`;
 
-    /*const tempWidth = document.createElement('span');
-    tempWidth.style.visibility = 'hidden';
-    tempWidth.style.position = 'absolute';
-    tempWidth.style.whiteSpace = 'pre';
-    tempWidth.style.font = window.getComputedStyle(tickerInput).font;
-    tempWidth.textContent = tickerInput.textContent;
-    document.body.appendChild(tempWidth);
+  // Sentiment
+  const sMean = (typeof f.sent_mean === "number") ? f.sent_mean : null;
+  const sStd  = (typeof f.sent_std  === "number") ? f.sent_std  : null;
+  el.sent.textContent  = sMean==null ? "—" : `${sMean>=0?"+":""}${sMean.toFixed(2)}`;
+  el.sent.className    = sMean==null ? "val neu" : `val ${signClass(sMean)}`;
+  el.sigma.textContent = sStd==null ? "σ—" : `σ${sStd.toFixed(2)}`;
 
-    const newWidth = Math.min(Math.max(tempWidth.offsetWidth + 24, 100), 250);
-    tickerInput.style.width = `${newWidth}px`;
+  // Strategy badge + confidence
+  const klass   = rec.class || "NA";
+  const confPct = Math.round(((rec.confidence ?? 0) * 100));
+  el.strat.textContent = klass;
+  el.bar.style.width   = `${Math.max(0, Math.min(100, confPct)) * 0.8}px`;
+  el.conf.textContent  = Number.isFinite(confPct) ? `${confPct}%` : "—";
 
-    document.body.removeChild(tempWidth); 
+  // ----- One-liner pieces -----
+  // Clean/Capitalise base sentence
+  let cleaned = stripClassAndConf(line, klass);
+  cleaned = capitalizeFirstWord(cleaned);
 
-    // Display full ticker input on hover
-    tickerInput.title = tickerInput.textContent.trim();
-  });*/
+  // Prefix text (up to "Source:") + Publisher
+  let prefixText = cleaned;
+  if (cleaned.toLowerCase().includes("source:")) {
+    prefixText = cleaned.split(/source:/i)[0].trim();
+  }
+  const publisher = (head?.publisher || "").trim();
+  const headlineTitle = (head?.title || "").trim();
+  const prefixHtml =
+    escapeHtml(prefixText ? `${prefixText}. ` : "") +
+    (publisher ? `Source: ${escapeHtml(publisher)} — ` : "Source: ");
 
-  const validationPrompt = document.getElementById('validationPrompt');
-  const hudInfo = document.getElementById('hud-info');
-  // WELCOME PROMPT (first view) - Intializes HUD with user's welcome page 
-  validationPrompt.textContent = "Welcome to MIDAS! Enter a ticker symbol to begin.";
-  validationPrompt.classList.add('neutral'); // Neutral Theme signifies unentered ticker
-
-  // RESETS & DISPLAYS validation message upon Enter key
-  function showValidationMessage(message, isError = true) {
-    validationPrompt.textContent = message;
-    validationPrompt.classList.remove('neutral'); // Removes neutral theme for invalid input
-    validationPrompt.style.color = isError ? '#FF5F57' : '#AAA';
+  // Build: prefix (plain) + headline (link or span)
+  if (head?.url) {
+    el.one.innerHTML =
+      `<span class="one-prefix">${prefixHtml}</span>` +
+      `<a href="#" data-external="${escapeHtml(head.url)}" class="one-headline src-link" data-full="${escapeHtml(headlineTitle)}">${escapeHtml(headlineTitle)}</a>`;
+  } else {
+    el.one.innerHTML =
+      `<span class="one-prefix">${prefixHtml}</span>` +
+      `<span class="one-headline" data-full="${escapeHtml(headlineTitle)}">${escapeHtml(headlineTitle || cleaned)}</span>`;
   }
 
-  function clearValidationMessage() {
-    validationPrompt.textContent = '';
-    validationPrompt.classList.remove('neutral');
+  // Click-through for the HEADLINE (link)
+  if (!el.one._wired) {
+    el.one.addEventListener("click", (ev) => {
+      const a = ev.target.closest('a[data-external]');
+      if (!a) return;
+      ev.preventDefault();
+      const href = a.getAttribute("data-external");
+      if (href) window.electronAPI?.openExternal(href);
+    });
+    el.one._wired = true;
   }
 
-  /** -------------------
-   * TICKER VALIDATION
-   -------------------- */
-  async function validateTicker() {
-    const rawValue = tickerInput.textContent.trim();
-    const ticker = rawValue.toUpperCase();
-    tickerInput.textContent = ticker;
-    validationPrompt.classList.remove('neutral');
+  // Cache age
+  el.cache.textContent = (typeof age === "number" && age >= 0) ? `⟳${age}s` : "⟳—s";
 
-    // VALIDATION PROMPT CASE 1: Empty Input
-    if (ticker === '') {
-      showValidationMessage('Please enter a ticker');
-      tickerInput.classList.add('invalid');
-      return false;
-    }
+  // Show HUD row then clamp HEADLINE only
+  el.hudInfo.classList.remove("hidden");
+  el.hudInfo.classList.add("active");
+  requestAnimationFrame(clampHeadline);
+}
 
-    // VALIDATION PROMPT CASE 2: Invalid Format
-    if (!/^[A-Z]{1,5}$/.test(ticker)) {
-      showValidationMessage('*Invalid ticker format. Use letters only (1-5 characters, e.g., AAPL).');
-      tickerInput.classList.add('invalid');
-      return false;
-    }
+// ---------- main handler ----------
+async function handleEnter(){
+  const v = formatAndValidateTicker(el.ticker.textContent);
 
-    // VALIDATION PROMPT CASE 3: Proper Format - Check to confirm ticker validity
-
-    try {
-      const response = await window.electronAPI.validateTicker(ticker);
-
-      if (!response.success) {
-        switch (response.reason) {
-          case 'not_found':
-            showValidationMessage('*Ticker not recognized. Please check the spelling or try a different ticker.');
-            break;
-          case 'invalid_format':
-            showValidationMessage('*Invalid ticker format. Use letters only (1-5 characters, e.g., AAPL');
-            break;
-          case 'network_error':
-            showValidationMessage('*Network error. Please try again later.');
-            break;
-          default:
-            showValidationMessage('*Unable to validate ticker. Please try again later.');
-        }
-
-        tickerInput.classList.add('invalid');
-        validationPrompt.classList.remove('hidden');
-        return false;
-      }
-
-    
-      // VALID TICKER - Shows Ticker Info/Clears validation prompts/invalid theme
-      clearValidationMessage();
-      tickerInput.classList.remove('invalid');
-      
-      // Displays HUD's ticker info when ticker is validated successfully
-      if (response.success) {
-          const hudInfo = document.getElementById('hud-info');
-          hudInfo.classList.add('active'); // Reveals Ticker Info
-          validationPrompt.style.color = '#AAA';
-          validationPrompt.classList.add('hidden');
-        }
-
-      console.log('Valid ticker confirmed: ', ticker);
-      return true;
-
-    } catch (error) {
-      showValidationMessage('*Unexpected error validating ticker.');
-      console.error(error);
-      return false;
-    }
+  if (!v.ok) {
+    showValidationMessage(v.msg, true);
+    el.ticker.classList.add("invalid");
+    clearHud();
+    currentTicker = null;
+    return;
   }
 
-  // Handles Enter key to search for ticker info
-  tickerInput.addEventListener('input', adjustTickerWidth);
-  tickerInput.addEventListener('keydown', async (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault(); // Prevents creation of newline
-      adjustTickerWidth(); // Recalculates width before validation
-      await validateTicker();
+  clearValidationMessage();
+  el.ticker.classList.remove("invalid");
 
-      // Hide HUD info immediately when new ticker is being validated
-      hudInfo.classList.remove('active');
-      hudInfo.classList.add('hidden');
-      validationPrompt.classList.remove('hidden');
+  if (isFetching) return;
+  if (currentTicker === v.ticker) return;
+  currentTicker = v.ticker;
 
-      // Clear existing HUD values before validating
-      [
-      '#last',
-      '#m1',
-      '#m5',
-      '#sent',
-      '#sigma',
-      '#strat',
-      '#conf',
-      '#one',
-      '#cache'
-      ].forEach(id => {
-        const el = document.querySelector(id);
-        if (el) el.textContent = '-';
-      });
+  try {
+    isFetching = true;
+    const payload = await fetchRun(currentTicker);
+    render(payload);
+  } catch (err) {
+    console.error(err);
+    showValidationMessage("*Unable to fetch data. Is the gateway running on 8015?", true);
+    clearHud();
+    currentTicker = null;
+  } finally {
+    isFetching = false;
+  }
+}
 
-      // Reruns ticker validation
-      const isValid = await validateTicker();
+// ---------- boot ----------
+document.addEventListener("DOMContentLoaded", () => {
+  el.validationPrompt.textContent = "Welcome to MIDAS! Enter a ticker symbol to begin.";
+  el.validationPrompt.classList.add("neutral");
 
-      // HUD info displayed once validation succeeds
-      if (isValid) {
-        hudInfo.classList.remove('hidden');
-        hudInfo.classList.add('active');
-        validationPrompt.classList.add('hidden');
-      }
-    }
+  el.ticker.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") { ev.preventDefault(); handleEnter(); }
   });
 
-  // Hook up IPC Stream
-  if (window.mainWindow && typeof update === 'function') {
-    window.mainWindow.onUpdate(update);
-  }
-
-  // Responsive Width of ticker input, adjusts width as user populates input
-  function adjustTickerWidth() {
-    const tickerText = tickerInput.textContent.trim();
-
-    // If empty → reset to default placeholder width
-    if (!tickerText) {
-      tickerInput.style.width = '90px';
-      return;
-    }
-
-    // Measure text width
-    const tickerSpan = document.createElement('span');
-    tickerSpan.style.visibility = 'hidden';
-    tickerSpan.style.position = 'absolute';
-    tickerSpan.style.font = window.getComputedStyle(tickerInput).font;
-    tickerSpan.textContent = tickerText;
-    document.body.appendChild(tickerSpan);
-    const textWidth = tickerSpan.offsetWidth;
-    document.body.removeChild(tickerSpan);
-
-    // Adjust within your limits
-    const minWidth = 20;
-    const maxWidth = 150;
-    const newWidth = Math.min(Math.max(textWidth + 20, minWidth), maxWidth);
-    tickerInput.style.width = `${newWidth}px`;
-}
-  
+  // Re-clamp headline when window width changes
+  window.addEventListener("resize", () => requestAnimationFrame(clampHeadline));
 });
-
-
-
-/**
- * TO DO: Invalid ticker input triggers a brief shake animation
- */
-const tickerInput = document.getElementById("tickerInput");
-
-function triggerShake() {
-  tickerInput.classList.add("shake");
-  tickerInput.style.borderBottom = "1px solid red";
-
-  // Remove class after animation so it can replay next time for invalid input
-  setTimeout(() => {
-    tickerInput.classList.remove("shake");
-    tickerInput.style.borderBottom = "1px solid rgba(255,255,255,0.3)";
-  }, 400);
-};
-
-
-
-/** ---------------------------------
- *  RENDER/UPDATE TICKER INFORMATION
- -----------------------------------*/
-
-function update(payload) {  // Updates Ticker Information
-  const { symbol, quote, sentiment, strategy, one_liner, cache_age_seconds } = payload;
-
-  // Sets visible ticker symbol
-  el.sym.textContent = symbol;
-  
-  // Displays last traded price
-  el.last.textContent = quote.last.toFixed(2);
-  el.last.className = `sec num ${signClass(quote.ret_1m_pct)}`; // signClass -> Pos/neg return style (green or red)
-
-  // Displays Bid/Ask
-  el.ba.textContent = `${quote.bid.toFixed(2)}/${quote.ask.toFixed(2)}`;  
-
-  // Displays Returns/Trends
-  el.m1.textContent = `1m ${(quote.ret_1m_pct >= 0 ? '+' : '')}${quote.ret_1m_pct.toFixed(2)}%`; 
-  el.m1.className = `sec num ${signClass(quote.ret_1m_pct)}`; // 1 min return w/ sign
-
-  el.m5.textContent = `5m ${(quote.ret_5m_pct >= 0 ? '+' : '')}${quote.ret_5m_pct.toFixed(2)}%`; 
-  el.m5.className = `sec num ${signClass(quote.ret_5m_pct)}`; // 5 min return w/ sign
-
-  // SMA Arrow indicates trend direction
-  const arrow = quote.sma20_distance_pct >= 0 ? '↑' : '↓';
-  el.sma.textContent = `${arrow}${Math.abs(quote.sma20_distance_pct).toFixed(2)}%`; 
-  el.sma.className = `sec num ${signClass(quote.sma20_distance_pct)}`;
-  // Computes if current price is above or below 20-period SMA
-
-  // Sentiment Display
-  el.sent.textContent = (sentiment.mean >= 0 ? '+' : '') + sentiment.mean.toFixed(2); 
-  el.sent.className = `val ${signClass(sentiment.mean)}`; // avg sent. score
-  el.sigma.textContent = `σ${sentiment.stdev.toFixed(2)}`;  // sent. standard deviation
-
-  // Strategy Recommender + Confidence Bar
-  el.strat.textContent = strategy.code; // NA, IC, CS, PS, CC
-  const pct = Math.max(0, Math.min(100, strategy.confidence_pct));
-  el.bar.style.width = `${pct * 0.8}px`; // 0, .80px fill
-  el.conf.textContent = `${pct}%`;
-
-  // For generated one-liner
-  el.one.textContent = one_liner;
-  el.one.title = one_liner;
-
-  // Cache Timer - Displays data age in seconds
-  el.cache.textContent = `⟳${cache_age_seconds}s`;
-} 
