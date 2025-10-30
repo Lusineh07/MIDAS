@@ -32,3 +32,28 @@ def put_cached(ticker: str, payload: dict) -> None:
     if not key or not isinstance(payload, dict):
         return
     _CACHE[key] = (time.time(), payload)
+
+# --------------------------------------------------------------------
+# Simple TTL decorator used by providers_tiingo and others
+# --------------------------------------------------------------------
+import functools
+
+def ttl_cache(ttl_seconds=60):
+    """Basic in-memory time-based cache decorator."""
+    def decorator(func):
+        cache = {}
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, tuple(sorted(kwargs.items())))
+            now = time.time()
+            if key in cache:
+                value, ts = cache[key]
+                if now - ts < ttl_seconds:
+                    return value
+            value = func(*args, **kwargs)
+            cache[key] = (value, now)
+            return value
+
+        return wrapper
+    return decorator
