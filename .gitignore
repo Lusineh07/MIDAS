@@ -1,20 +1,30 @@
-venv/
-.env
+# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-build/
-dist/
-.eggs/
-*.egg-info/
+.venv/
+*.log
+
+# Node / Electron
+frontend/node_modules/
+frontend/dist/
+frontend/out/
+frontend/*.log
+
+# OS/editor
 .DS_Store
-.idea/
+Thumbs.db
 .vscode/
-*.swp
-*.swo
-*~
-training/data/
-__pycache__/
-*.pyc
+.idea/
+
+# Tokens & local env
+*.env
+.env
+.env.*.local
+# model/data artifacts (if any)
+checkpoints/
+checkpoints_backup/
+data/*.pt
+data/*.bin
+data/*.pkl
+data/*.bin
+data/*.pk.

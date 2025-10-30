@@ -1,52 +1,42 @@
 /**
- * preload.cjs
- * ==========================================================
- * -- Script runs before renderer process is loaded.
- * -- Securely exposes specific backend functions to frontend 
- *    through Electron's contextBridge
- * 
- * -- Prevents direct Node.js access in renderer for security 
- *    for safe communication via IPC (inter-process communication)
- * 
- * TO DO
- * -- link each API
- *  ====================================================== */
-
-const { contextBridge, ipcRenderer } = require('electron');
-
-// Expose API methods to renderer
-contextBridge.exposeInMainWorld('electronAPI', {
-
-    // TICKER VALIDATION
-    validateTicker: (ticker) => ipcRenderer.invoke('validate-ticker', ticker),
-
-    // TICKER DATA - Fetch quote snapshot (price, bid/ask, SMA comparison)
-    getQuote: (ticker) => ipcRenderer.invoke('getQuote', ticker),
-
-    // NEWS/HEADLINES DATA - Retrieve top recent news headlines for ticker
-    getNews: (ticker) => ipcRenderer.invoke('getNews', ticker),
-
-    // SENTIMENT ANALYSIS - send fetched headlines to (FinBERT) backend for sent. scoring
-    analyzeSentiment: (ticker) => ipcRenderer.invoke('analyzeSentiment', ticker),
-
-    // STRATEGY RECOMMENDER
-    getRecommendation: (features) => ipcRenderer.invoke('getRecommendation', features),
-    
-    // ONE-LINER SUGGESTION
-    generateOneLiner: (prompt) => ipcRenderer.invoke('generateOneLiner', prompt),
-});
-
-
-/** Mock Payload Code
- * -- To visualize mock data, remove comment block to implement code
- 
- const { contextBridge, ipcRenderer } = require('electron');
-
-contextBridge.exposeInMainWorld('hud', {
-    onUpdate: (cb) => {
-        const listener = (_event, payload) => cb(payload);
-        ipcRenderer.on('hud:update', listener);
-    },
-    getVersion: () => ipcRenderer.invoke('hud:getVersion')
-});
+ * preload.cjs (Windows copy)
+ * Bridge from renderer -> Electron main via contextBridge + IPC
  */
+const { contextBridge, ipcRenderer } = require("electron");
+
+const GATEWAY = "http://127.0.0.1:8015";
+
+async function hit(url) {
+  const res = await fetch(url, { method: "GET", cache: "no-store", headers: { "Accept": "application/json" } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.json();
+}
+function validTicker(t) { return /^[A-Z]{1,5}$/.test(String(t || "").trim().toUpperCase()); }
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  async validateTicker(ticker) {
+    const tk = String(ticker || "").trim().toUpperCase();
+    if (!validTicker(tk)) return { success: false, reason: "invalid_format" };
+    try {
+      const data = await hit(`${GATEWAY}/api/run?ticker=${encodeURIComponent(tk)}`);
+      if (data && data.features && data.recommendation) return { success: true };
+      return { success: false, reason: "not_found" };
+    } catch {
+      return { success: false, reason: "network_error" };
+    }
+  },
+  async fetchRun(ticker) {
+    const tk = String(ticker || "").trim().toUpperCase();
+    return hit(`${GATEWAY}/api/run?ticker=${encodeURIComponent(tk)}`);
+  },
+
+  // Use IPC -> main to open external links (most robust with sandbox/contextIsolation)
+  openExternal(url) {
+    if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+      ipcRenderer.invoke("open-external", url);
+    }
+  },
+});
