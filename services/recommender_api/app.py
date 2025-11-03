@@ -1,88 +1,39 @@
+# services/recommender_api/app.py
 from __future__ import annotations
-from typing import Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, Query
-import os, httpx, time
+from fastapi import FastAPI, HTTPException
+from typing import Dict, Any
+import os
+import joblib
 
-CTX_URL = os.getenv("CTX_URL", "http://127.0.0.1:8012")
-REC_URL = os.getenv("REC_URL", "http://127.0.0.1:8014")
+from .inference import Recommender, FeatureIn
 
-TIMEOUT = float(os.getenv("GATEWAY_TIMEOUT_S", "8"))
-RETRIES = int(os.getenv("GATEWAY_RETRIES", "2"))
-DELAY   = float(os.getenv("GATEWAY_RETRY_DELAY_S", "0.25"))
+app = FastAPI(title="MIDAS Recommender API", version="v1")
 
-app = FastAPI(title="MIDAS Gateway API", version="v1")
+# Default model bundle path (adjust if your repo uses a subfolder)
+MODEL_PATH = os.getenv("MODEL_PATH", "services/recommender_api/model.joblib")
 
 @app.get("/healthz")
 def healthz():
     return {
         "status": "ok",
-        "service": "gateway",
-        "version": "v1",
-        "CTX_URL": CTX_URL,
-        "REC_URL": REC_URL,
+        "model_path": MODEL_PATH,
     }
 
-def _get_json(url: str, params: dict | None = None) -> dict:
-    last_exc: Optional[Exception] = None
-    with httpx.Client(timeout=TIMEOUT, trust_env=False) as client:
-        for _ in range(RETRIES + 1):
-            try:
-                r = client.get(url, params=params)
-                r.raise_for_status()
-                return r.json()
-            except Exception as e:
-                last_exc = e
-                time.sleep(DELAY)
-    raise HTTPException(status_code=502, detail=f"GET {url} failed: {last_exc}")
+@app.on_event("startup")
+def _load_model():
+    global model
+    if not os.path.exists(MODEL_PATH):
+        raise RuntimeError(f"Model bundle not found at {MODEL_PATH}")
+    model = Recommender(MODEL_PATH)
 
-def _post_json(url: str, payload: dict) -> dict:
-    last_exc: Optional[Exception] = None
-    with httpx.Client(timeout=TIMEOUT, trust_env=False) as client:
-        for _ in range(RETRIES + 1):
-            try:
-                r = client.post(url, json=payload)
-                r.raise_for_status()
-                return r.json()
-            except Exception as e:
-                last_exc = e
-                time.sleep(DELAY)
-    raise HTTPException(status_code=502, detail=f"POST {url} failed: {last_exc}")
-
-@app.get("/api/run")
-def run(t: str = Query(..., alias="ticker")) -> Dict[str, Any]:
-    # 1) features (context v2)
-    feat_payload = _get_json(f"{CTX_URL}/api/features/v2", params={"ticker": t})
-    features: Dict[str, Any] = feat_payload.get("features", {}) or {}
-    top_headline: Optional[Dict[str, str]] = feat_payload.get("top_headline")
-    feature_note = feat_payload.get("error")
-    quote: Dict[str, float] = feat_payload.get("quote") or {"last": 0.0, "bid": 0.0, "ask": 0.0}
-
-    # 2) recommendation (recommender) — expects TOP-LEVEL fields
-    rec = _post_json(f"{REC_URL}/api/recommend", features)
-
-    # 3) one-liner (context)
-    headline = top_headline or {"title": "", "publisher": "", "url": ""}
+@app.post("/api/recommend")
+def recommend(features: FeatureIn) -> Dict[str, Any]:
+    """Run model inference for the given features."""
     try:
-        one = _post_json(f"{CTX_URL}/api/one_liner", {
-            "class_":     rec.get("class", "NO_ACTION"),
-            "confidence": rec.get("confidence", 0.0),
-            "title":      headline.get("title", ""),
-            "publisher":  headline.get("publisher", ""),
-            "url":        headline.get("url", ""),
-        })
-    except HTTPException:
-        one = {"text": f"{rec.get('class','NO_ACTION')} · {int(rec.get('confidence',0)*100)}% confidence"}
-
-    resp = {
-        "ticker": t,
-        "features": features,
-        "features_used": features,  # debug visibility
-        "recommendation": rec,
-        "one_liner": one,
-        "quote": quote,             # always include
-    }
-    if feature_note:
-        resp["features_note"] = feature_note
-    if top_headline:
-        resp["top_headline"] = top_headline
-    return resp
+        result = model.predict(features)
+        # ensure it has 'class' and 'confidence' keys for Gateway compatibility
+        if not isinstance(result, dict) or "class" not in result:
+            raise ValueError("Model.predict() did not return expected dict")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
