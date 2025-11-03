@@ -9,3 +9,4 @@ requests==2.*
 requests
 feedparser
 httpx
+feedparser
