@@ -9,4 +9,10 @@ requests==2.*
 requests
 feedparser
 httpx
+fastapi>=0.100
+uvicorn>=0.30
+httpx>=0.24
+transformers>=4.44
+accelerate>=0.33
+torch
 feedparser

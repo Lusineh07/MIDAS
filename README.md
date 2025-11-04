@@ -34,6 +34,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
+```
 
 2) Run the services (WSL)
 
@@ -47,7 +48,7 @@ Gateway 8015
 
 Sentiment 8016
 
-A. Sentiment (FR-3 placeholder)
+A. Sentiment (FR-3 )
 
 uvicorn services.sentiment_api.app:app --port 8016
 
@@ -60,7 +61,7 @@ export TIINGO_TOKEN=YOUR_TIINGO
 export FINNHUB_TOKEN=YOUR_FINNHUB
 uvicorn services.context_api.app:app --port 8012
 
-Mocked CI/dev mode (no tokens):
+***Mocked CI/dev mode (no tokens - only run if no token!!)**:
 
 export LIVE_PROVIDERS=0
 uvicorn services.context_api.app:app --port 8012
@@ -111,14 +112,6 @@ Tokens: TIINGO_TOKEN, FINNHUB_TOKEN
 
 LIVE_PROVIDERS=0 to run Context in mocked mode (no tokens, useful for CI)
 
-Environment
-
-Ports: 8012 Context, 8014 Recommender, 8015 Gateway, 8016 Sentiment
-
-Tokens: TIINGO_TOKEN, FINNHUB_TOKEN
-
-LIVE_PROVIDERS=0 to run Context in mocked mode (no tokens, useful for CI)
-
 Troubleshooting
 
 HUD shows empty or “NO_ACTION” every time
@@ -154,3 +147,45 @@ Runs services/recommender_api/tests/test_latency.py
 Boots Context in LIVE_PROVIDERS=0 mode and curls /api/features/v2 to validate schema
 
 The smoke avoids external API calls by using mocked providers.
+
+## Sentiment API (service on :8016)
+MIDAS Context calls:
+
+POST /api/sentiment
+{"texts": ["...string...", "...string..."]} and expects:
+```json
+{ "ts": "...Z", "n": 3, "mean": 0.12, "std": 0.08, "samples": [0.2, 0.1, 0.06], "engine": "finbert|lexicon" }
+
+Run (WSL):
+
+uvicorn services.sentiment_api.app:app --port 8016
+How it works:
+
+Tries HuggingFace FinBERT (ProsusAI/finbert) via transformers.pipeline.
+
+If transformers/FinBERT aren’t available, falls back to a lightweight lexicon scorer.
+
+90-second TTL cache per unique text set.
+
+Install (optional FinBERT CPU wheels):
+
+pip install transformers accelerate
+# CPU torch wheel:
+pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+
+Context config: SENT_URL defaults to localhost:
+
+export SENT_URL=http://127.0.0.1:8016
+uvicorn services.context_api.app:app --port 
+
+Troubleshooting:
+
+HUD shows Sent — or DevTools prints “Unexpected token 'H' …” ⇒ Sentiment not running or returned an HTML error page.
+
+Curl to test:
+
+
+curl -s http://127.0.0.1:8016/healthz
+curl -s -X POST 'http://127.0.0.1:8016/api/sentiment' \
+  -H 'Content-Type: application/json' \
+  -d '{"texts":["Good earnings beat","Weak guidance hurts outlook"]}'
