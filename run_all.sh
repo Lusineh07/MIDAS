@@ -13,7 +13,7 @@ echo "Installing dependencies..."
 pip install -r requirements.txt
 
 # 3. Export environment variables
-export LIVE_PROVIDERS=0
+export LIVE_PROVIDERS=1
 export CTX_URL=http://127.0.0.1:8012
 export REC_URL=http://127.0.0.1:8014
 
