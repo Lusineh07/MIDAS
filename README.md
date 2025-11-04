@@ -1,191 +1,277 @@
 # MIDAS — Market Insight & Decision Assist System
 
-Windows HUD that, for a ticker, pulls news + quote, computes features, gets a strategy class from a calibrated tree, and renders a ≤180-char one-liner with a clickable headline.
-
-This repository uses the **canonical** layout only:
-
-MIDAS/
-services/
-context_api/ # /healthz, /api/features, /api/features/v2, /api/one_liner
-recommender_api/ # /healthz, /api/recommend (lazy load)
-gateway_api/ # /api/run (ctx→rec→one_liner), trust_env=False
-sentiment_api/ # /api/sentiment (placeholder; 90s TTL; FR-3)
-frontend/ # Electron HUD (Windows)
-
-
-> **Do not** use/modify `backend/services` (legacy). Only `services/...` is in scope.
+MIDAS is a Windows-based desktop application that provides market insights for any ticker symbol. It pulls quotes and news, computes feature data, predicts a trading strategy class, and shows a short one-line recommendation with a clickable headline.
 
 ---
 
-## Quickstart
+## 1. Overview
 
-### 0) Prereqs
+**Architecture**
+- **Backend APIs (Python/FastAPI):** Context, Recommender, Gateway, Sentiment  
+- **Frontend (Electron/Node.js):** Interactive HUD interface for Windows  
 
-- **Windows 10/11** (HUD) with **Node.js 18+** and **npm 9+**
-- **WSL** (Ubuntu recommended) with **Python 3.11+**
-- Tokens (if using live providers): create a `.env` file (see `.env.example`)
-  - `TIINGO_TOKEN`, `FINNHUB_TOKEN`
+MIDAS uses multiple backend microservices that communicate through fixed ports, all managed through a single startup script.
 
-### 1) Install Python deps (WSL)
+---
 
-```bash
+## 2. System Requirements
+
+- **Operating System:** Windows 10 or 11 (Administrator access required)  
+- **Node.js:** v18 or higher  
+- **npm:** v9 or higher  
+- **WSL:** (Ubuntu recommended) with Python 3.11+   
+- **Internet Connection:** Required for live API data
+- **Tokens:** TIINGO_TOKEN, FINNHUB_TOKEN (if using live providers)
+
+---
+
+## 3. Installation
+
+### Step 1: Clone the Repository
+
+Open **Windows PowerShell** or **Command Prompt**, then run:
+
+```
+cd Documents
+git clone https://github.com/Lusineh07/MIDAS.git
 cd MIDAS
+```
+
+---
+
+### Step 2: Create a Virtual Environment and Install Dependencies
+
+Create and activate a Python virtual environment:
+
+```
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
 ```
 
-2) Run the services (WSL)
+---
 
-Open four WSL terminals (or background them). Fixed ports:
+## 4. Running the Backend
 
-Context 8012
+You can run the backend either automatically using the provided script (recommended) or manually for debugging.
 
-Recommender 8014
+### Option A: Quick Start (Recommended)
 
-Gateway 8015
+Run all backend services at once:
 
-Sentiment 8016
+```
+./run_all.sh
+```
 
-A. Sentiment (FR-3 )
+This script:
+- Activates the virtual environment  
+- Installs dependencies if needed  
+- Starts all four APIs automatically on fixed ports  
 
-uvicorn services.sentiment_api.app:app --port 8016
+| Service | Port | Description |
+|----------|------|-------------|
+| Context API | 8012 | Builds features and fetches market data |
+| Recommender API | 8014 | Predicts trading strategy from features |
+| Gateway API | 8015 | Connects Context and Recommender |
+| Sentiment API | 8016 | Handles FinBERT sentiment analysis |
 
-B. Context
+When successful, the terminal will display:
 
-Live data (requires tokens):
+```
+MIDAS is running!
+Ports:
+ - Context API:     http://127.0.0.1:8012
+ - Recommender API: http://127.0.0.1:8014
+ - Gateway API:     http://127.0.0.1:8015
+ - Sentiment API:   http://127.0.0.1:8016
+```
 
-export LIVE_PROVIDERS=1
-export TIINGO_TOKEN=YOUR_TIINGO
-export FINNHUB_TOKEN=YOUR_FINNHUB
-uvicorn services.context_api.app:app --port 8012
+Keep this terminal running while MIDAS is active.
 
-***Mocked CI/dev mode (no tokens - only run if no token!!)**:
+---
 
+### Option B: Run Each Service Manually
+
+If needed, you can start each API in a separate terminal window.
+
+**Terminal 1: Context API**
+```
 export LIVE_PROVIDERS=0
 uvicorn services.context_api.app:app --port 8012
+```
 
-C. Recommender
-
+**Terminal 2: Recommender API**
+```
 uvicorn services.recommender_api.app:app --port 8014
+```
 
-D. Gateway
-
+**Terminal 3: Gateway API**
+```
 export CTX_URL=http://127.0.0.1:8012
 export REC_URL=http://127.0.0.1:8014
 uvicorn services.gateway_api.app:app --port 8015
+```
 
-Smoke:
-
-curl -s 'http://127.0.0.1:8012/healthz'
-curl -s 'http://127.0.0.1:8014/healthz'
-curl -s 'http://127.0.0.1:8015/api/run?ticker=NVDA' | jq '{quote:.quote,rec:.recommendation,age:.cache_age_seconds}'
-
-Notes
-
-All httpx clients use trust_env=False.
-
-Context has a per-ticker TTL cache (default 45 s) and returns a stable ts.
-
-Quote fallback may set quote.quality="estimated" when bid/ask is derived.
-
-3) Start the HUD (Windows Powershell ADMIN)
-
-cd MIDAS\frontend
-npm install
-npm run start
-
-Usage:
-
-Type a ticker, press Enter (single fetch; no auto-polling).
-
-One-liner = strategy sentence + “Source: Publisher — ” + HEADLINE (clickable).
-
-Only the headline is width-aware and truncates at a word boundary with “…”.
-
-Environment
-
-Ports: 8012 Context, 8014 Recommender, 8015 Gateway, 8016 Sentiment
-
-Tokens: TIINGO_TOKEN, FINNHUB_TOKEN
-
-LIVE_PROVIDERS=0 to run Context in mocked mode (no tokens, useful for CI)
-
-Troubleshooting
-
-HUD shows empty or “NO_ACTION” every time
-
-Verify Gateway is pointing to the right Context/Recommender URLs.
-
-Ensure LIVE_PROVIDERS=1 with valid tokens, or accept mocked features.
-
-Recommender fixed class/prob alignment is in place; if all inputs are degenerate, it can collapse to a default—check features payload from Context.
-
-Headline doesn’t match ticker
-
-Context uses Finnhub first, then Yahoo RSS fallback with alias-aware scoring. Verify the features.headlines source list; if RSS fallback is active, alias mapping may dominate on thin tickers.
-
-Quote status shows quality:"estimated"
-
-Bid/ask missing from provider; we estimate a tight spread. This is expected during off-hours or degraded feeds.
-
-Port conflicts
-
-Something is already listening on 8012/8014/8015/8016. Stop previous instances or change ports locally (keep the canonical map for commits).
-
-Corporate proxy
-
-Clients run with trust_env=False. If you must use a proxy, set direct service URLs on localhost and avoid proxying the loopback.
-
-CI Smoke (optional)
-
-A minimal GitHub Actions workflow is included at /.github/workflows/smoke.yml:
-
-Runs services/recommender_api/tests/test_latency.py
-
-Boots Context in LIVE_PROVIDERS=0 mode and curls /api/features/v2 to validate schema
-
-The smoke avoids external API calls by using mocked providers.
-
-## Sentiment API (service on :8016)
-MIDAS Context calls:
-
-POST /api/sentiment
-{"texts": ["...string...", "...string..."]} and expects:
-```json
-{ "ts": "...Z", "n": 3, "mean": 0.12, "std": 0.08, "samples": [0.2, 0.1, 0.06], "engine": "finbert|lexicon" }
-
-Run (WSL):
-
+**Terminal 4: Sentiment API**
+```
 uvicorn services.sentiment_api.app:app --port 8016
-How it works:
+```
 
-Tries HuggingFace FinBERT (ProsusAI/finbert) via transformers.pipeline.
+---
 
-If transformers/FinBERT aren’t available, falls back to a lightweight lexicon scorer.
+## 5. Launching the Frontend (HUD Interface)
 
-90-second TTL cache per unique text set.
+The frontend runs separately from the backend.
 
-Install (optional FinBERT CPU wheels):
+1. Open a new **PowerShell** or **Command Prompt**.  
+2. Navigate to the frontend folder:
 
-pip install transformers accelerate
-# CPU torch wheel:
-pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+   ```
+   cd MIDAS/frontend
+   ```
+3. Install dependencies (only once):
+   ```
+   npm install
+   ```
+4. Start the Electron HUD:
+   ```
+   npm run start
+   ```
 
-Context config: SENT_URL defaults to localhost:
+The Electron window should open and display the MIDAS HUD.  
+Enter a ticker symbol (e.g., `AAPL`) and press **Enter** to fetch data.
 
-export SENT_URL=http://127.0.0.1:8016
-uvicorn services.context_api.app:app --port 
+---
 
-Troubleshooting:
+## 6. Usage
 
-HUD shows Sent — or DevTools prints “Unexpected token 'H' …” ⇒ Sentiment not running or returned an HTML error page.
+Type a ticker and press Enter to fetch the current market snapshot.  
+MIDAS performs a single fetch (no auto-polling).
 
-Curl to test:
+The one-liner format:
+```
+[strategy sentence] — Source: [Publisher] — [Headline...]
+```
 
+The headline is clickable and truncates neatly at a word boundary using “…”.
 
-curl -s http://127.0.0.1:8016/healthz
-curl -s -X POST 'http://127.0.0.1:8016/api/sentiment' \
-  -H 'Content-Type: application/json' \
-  -d '{"texts":["Good earnings beat","Weak guidance hurts outlook"]}'
+---
+
+## 7. Environment Summary
+
+```
+Ports:
+  8012  Context API
+  8014  Recommender API
+  8015  Gateway API
+  8016  Sentiment API
+
+Tokens:
+  TIINGO_TOKEN
+  FINNHUB_TOKEN
+
+LIVE_PROVIDERS=0  # Run Context in mocked mode (no tokens, for CI or offline)
+```
+
+---
+
+## 8. Troubleshooting
+
+**HUD shows empty or “NO_ACTION”**  
+Verify Gateway URLs and ensure valid tokens are set.  
+If using mocked mode (LIVE_PROVIDERS=0), limited data is expected.
+
+**Headline doesn’t match ticker**  
+The Context API uses Finnhub first, then Yahoo RSS fallback.  
+On low-activity tickers, fallback headlines may appear instead.
+
+**Quote shows quality:"estimated"**  
+Occurs during off-hours or when bid/ask data are missing.
+
+**Port conflicts**  
+Ensure no other apps are running on ports 8012–8016.
+
+**Corporate proxy**  
+HTTP clients use `trust_env=False`. Avoid proxying localhost.
+
+---
+
+## 9. CI Smoke (Optional)
+
+A minimal GitHub Actions workflow is located at:
+
+```
+.github/workflows/smoke.yml
+```
+
+It:
+- Runs `services/recommender_api/tests/test_latency.py`
+- Boots Context in `LIVE_PROVIDERS=0` mode
+- Validates `/api/features/v2` schema using mocked providers
+
+---
+
+## 10. Sentiment API (Port 8016)
+
+The Sentiment API analyzes text using FinBERT or a fallback lexicon model.
+
+### Endpoint
+```
+POST /api/sentiment
+```
+
+Example request:
+```
+{
+  "texts": ["Good earnings beat", "Weak guidance hurts outlook"]
+}
+```
+
+Example response:
+```
+{
+  "ts": "...Z",
+  "n": 3,
+  "mean": 0.12,
+  "std": 0.08,
+  "samples": [0.2, 0.1, 0.06],
+  "engine": "finbert|lexicon"
+}
+```
+
+To run the service manually:
+```
+uvicorn services.sentiment_api.app:app --port 8016
+```
+
+If FinBERT is unavailable, MIDAS automatically falls back to a lightweight lexicon scorer.  
+Each text set is cached for 90 seconds.
+
+---
+
+## 11. Stopping MIDAS
+
+**Backend:**  
+- If using `run_all.sh`: Press `Ctrl + C` once in that terminal.  
+- If running manually: Press `Ctrl + C` in each terminal window.  
+
+**Frontend:**  
+- Close the Electron window, or  
+- Press `Ctrl + C` in the frontend terminal.
+
+---
+
+## 12. Notes
+
+- `run_all.sh` is the recommended way to start the system.  
+- Keep port mappings consistent with the defaults above.  
+- The frontend must run in a separate terminal from the backend.  
+- If dependencies are missing, rerun:
+  ```
+  pip install -r requirements.txt
+  ```
+
+---
+
+© MIDAS Project
