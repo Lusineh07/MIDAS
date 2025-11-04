@@ -36,10 +36,10 @@ function createWindow () {
 
   mainWindow = new BrowserWindow({
     width: 1400,
-    height: 800,
+    height: 120,
     minWidth: 900,
     // You’re treating this like a thin HUD; we clamp height to 40 in resize handler
-    maxHeight: 40,
+    maxHeight: 120,
     useContentSize: true,
     resizable: true,
     movable: true,
@@ -60,11 +60,11 @@ function createWindow () {
     }
   });
 
-  // Keep height ~40px while allowing width to change
-  mainWindow.on('resize', () => {
-    const [w] = mainWindow.getSize();
-    if (mainWindow) mainWindow.setSize(w, 40);
-  });
+  // // Keep height ~40px while allowing width to change
+  // mainWindow.on('resize', () => {
+  //   const [w] = mainWindow.getSize();
+  //   if (mainWindow) mainWindow.setSize(w, 40);
+  // });
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.webContents.openDevTools({ mode: 'detach' });

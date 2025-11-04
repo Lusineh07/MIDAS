@@ -278,9 +278,9 @@ document.body.addEventListener("mouseover", (ev) => {
 });
 
 document.body.addEventListener("mousemove", (ev) => {
-  // keep tooltip following cursor
-  tooltip.style.left = ev.pageX + 12 + "px";
-  tooltip.style.top = ev.pageY + 12 + "px";
+  const hudRect = document.getElementById("hud").getBoundingClientRect();
+  tooltip.style.left = (ev.pageX - hudRect.left + 12) + "px";
+  tooltip.style.top = (ev.pageY - hudRect.top + 12) + "px";
 });
 
 document.body.addEventListener("mouseout", () => {
