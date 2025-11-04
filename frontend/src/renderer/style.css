@@ -135,6 +135,19 @@ a[href] {
   border-bottom: 1px dotted rgba(201,201,255,0.35);
   cursor: pointer;
 }
+.oneliner a:hover,
+.src-link:hover {
+  color: #b3b8ff;
+  border-bottom: 1px solid rgba(201,201,255,0.6);
+  text-shadow: 0 0 4px rgba(180,180,255,0.4);
+}
+
+#ticker:hover {
+  border-color: #c9c9ff;
+  background-color: #363654;
+  transition: all 0.15s ease;
+}
+
 
 .pos { color: var(--pos); }
 .neg { color: var(--neg); }
@@ -153,3 +166,27 @@ a[href] {
 /* Validation */
 .validationPrompt { opacity: 1; transition: opacity 0.4s ease; }
 .validationPrompt.hidden { opacity: 0; pointer-events: none; }
+
+/* ========================================
+   TOOLTIP BOX
+   ======================================== */
+.tooltip-box {
+  position: fixed;
+  pointer-events: none;
+  background: rgba(25, 25, 40, 0.95);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.3;
+  border-radius: 6px;
+  padding: 6px 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 2147483647; /* 🚀 Max possible layer value */
+  max-width: 260px;
+  white-space: normal;
+}
+.tooltip-box strong {
+  color: #a9b7ff;
+}

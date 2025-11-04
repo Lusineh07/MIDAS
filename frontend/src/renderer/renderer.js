@@ -258,3 +258,34 @@ document.addEventListener("DOMContentLoaded", () => {
   // Re-clamp headline when window width changes
   window.addEventListener("resize", () => requestAnimationFrame(clampHeadline));
 });
+
+// ---------- Tooltip hover handler (3-second delay) ----------
+const tooltip = $("tooltip");
+let tooltipTimer = null;
+
+document.body.addEventListener("mouseover", (ev) => {
+  const target = ev.target.closest("[data-tooltip]");
+  if (!target) return;
+  const text = target.getAttribute("data-tooltip");
+  if (!text) return;
+
+  // Start a timer — show tooltip only after 3 seconds of hover
+  tooltipTimer = setTimeout(() => {
+    tooltip.innerHTML = text;
+    tooltip.style.opacity = "1";
+    tooltip.style.transform = "translateY(0)";
+  }, 2000);
+});
+
+document.body.addEventListener("mousemove", (ev) => {
+  // keep tooltip following cursor
+  tooltip.style.left = ev.pageX + 12 + "px";
+  tooltip.style.top = ev.pageY + 12 + "px";
+});
+
+document.body.addEventListener("mouseout", () => {
+  // cancel pending tooltip or hide existing one
+  clearTimeout(tooltipTimer);
+  tooltip.style.opacity = "0";
+  tooltip.style.transform = "translateY(4px)";
+});
