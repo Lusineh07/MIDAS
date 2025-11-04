@@ -1,19 +1,27 @@
 # MIDAS — Market Insight & Decision Assist System
 
-MIDAS is a Windows-based desktop application that provides market insights for any ticker symbol. It pulls quotes and news, computes feature data, predicts a trading strategy class, and shows a short one-line recommendation with a clickable headline.
+Windows HUD that, for a ticker, pulls news and quote data, computes market features, predicts a trading strategy class using a calibrated decision tree, and renders a ≤180-character one-liner with a clickable headline.
 
 ---
 
-## 1. Overview
+## 1. Repository Layout
 
-**Architecture**
-- **Backend APIs (Python/FastAPI):** Context, Recommender, Gateway, Sentiment  
-- **Frontend (Electron/Node.js):** Interactive HUD interface for Windows  
+This repository uses the canonical layout only:
 
-MIDAS uses multiple backend microservices that communicate through fixed ports, all managed through a single startup script.
+```
+MIDAS/
+ ├── services/
+ │    ├── context_api/      # /healthz, /api/features, /api/features/v2, /api/one_liner
+ │    ├── recommender_api/  # /healthz, /api/recommend (lazy load)
+ │    ├── gateway_api/      # /api/run (ctx → rec → one_liner), trust_env=False
+ │    └── sentiment_api/    # /api/sentiment (placeholder; 90s TTL; FR-3)
+ └── frontend/              # Electron HUD (Windows)
+```
+
+**Do not use or modify** `backend/services` (legacy).  
+Only the `services/...` directories are in scope.
 
 ---
-
 ## 2. System Requirements
 
 - **Operating System:** Windows 10 or 11 (Administrator access required)  
@@ -24,8 +32,42 @@ MIDAS uses multiple backend microservices that communicate through fixed ports, 
 - **Tokens:** TIINGO_TOKEN, FINNHUB_TOKEN (if using live providers)
 
 ---
+## 3. Environment Configuration
 
-## 3. Installation
+MIDAS uses environment variables to control data sources and tokens.
+
+### Create a `.env` File
+
+Inside the project root (`MIDAS/`), create a file named `.env` with the following contents:
+
+```
+# API Tokens (required for live mode)
+TIINGO_TOKEN=your_tiingo_token
+FINNHUB_TOKEN=your_finnhub_token
+
+# Live mode switch
+LIVE_PROVIDERS=1
+```
+### Explanation
+
+- `LIVE_PROVIDERS=1` enables live data from Tiingo and Finnhub.  
+  Use this when you have valid API tokens.
+- `LIVE_PROVIDERS=0` enables **mocked mode** (offline or CI).  
+  No tokens are required — data is simulated for testing.
+- The backend automatically loads `.env` values at startup.  
+- Default service ports are:
+  - Context API → 8012  
+  - Recommender API → 8014  
+  - Gateway API → 8015  
+  - Sentiment API → 8016  
+
+Example:  
+If you are developing without internet access or tokens, set `LIVE_PROVIDERS=0`.  
+When deploying or using real data, set `LIVE_PROVIDERS=1`.
+
+---
+
+## 4. Quickstart
 
 ### Step 1: Clone the Repository
 
