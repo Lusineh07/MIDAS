@@ -1,5 +1,9 @@
 #!/bin/bash
 # MIDAS — Quick Local Setup Script
+# Load environment variables
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
 
 # 1. Create and activate virtual environment if not exists
 if [ ! -d ".venv" ]; then
