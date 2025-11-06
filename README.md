@@ -65,6 +65,39 @@ Example:
 If you are developing without internet access or tokens, set `LIVE_PROVIDERS=0`.  
 When deploying or using real data, set `LIVE_PROVIDERS=1`.
 
+## 3.1. API Tokens Setup
+
+To enable **live mode**, MIDAS requires free API tokens from **Finnhub** and **Tiingo**.  
+These allow the Context API to fetch real stock quotes, headlines, and sentiment data.
+
+### Finnhub Token  
+- **Website:** [https://finnhub.io](https://finnhub.io)  
+- Click **“Get free API key”** or **Sign Up** to create an account.  
+- Once logged in, go to your **Dashboard → API Key**.  
+- Copy your token (it will look like `c0xxxxxxxxxxxxxxxxxxxxxxxx`).  
+
+### Tiingo Token  
+- **Website:** [https://api.tiingo.com](https://api.tiingo.com)  
+- Create a free account using **Sign Up**.  
+- After logging in, go to **Account → API Token**.  
+- Copy your token (it will look like `6fxxxxxxxxxxxxxxxxxxxxxxxx`).  
+
+### 🔧 Configure Your `.env` File  
+
+Add the tokens inside your `.env` file in the project root:
+
+```bash
+LIVE_PROVIDERS=1
+FINNHUB_TOKEN=your_finnhub_token_here
+TIINGO_TOKEN=your_tiingo_token_here
+```
+---
+
+**With tokens configured, MIDAS will:**
+- Retrieve **real-time market quotes** and **financial news headlines**  
+- Analyze sentiment using FinBERT through the Sentiment API  
+- Generate accurate strategy recommendations and summaries in the HUD  
+
 ---
 
 ## 4. Quickstart
